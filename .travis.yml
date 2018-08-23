@@ -10,10 +10,14 @@ os:
   - osx
 
 env:
-  - PYTHON_VERSION=3.5 HAS_GDAL=true
-  - PYTHON_VERSION=3.6 HAS_GDAL=true
-  - PYTHON_VERSION=3.5 HAS_GDAL=false
-  - PYTHON_VERSION=3.6 HAS_GDAL=false
+  - PYTHON_VERSION=3.5 HAS_GDAL=true HAS_CAMERA=true
+  - PYTHON_VERSION=3.6 HAS_GDAL=true HAS_CAMERA=true
+  - PYTHON_VERSION=3.5 HAS_GDAL=false HAS_CAMERA=true
+  - PYTHON_VERSION=3.6 HAS_GDAL=false HAS_CAMERA=true
+  - PYTHON_VERSION=3.5 HAS_GDAL=true HAS_CAMERA=false
+  - PYTHON_VERSION=3.6 HAS_GDAL=true HAS_CAMERA=false
+  - PYTHON_VERSION=3.5 HAS_GDAL=false HAS_CAMERA=false
+  - PYTHON_VERSION=3.6 HAS_GDAL=false HAS_CAMERA=false
 
 before_install:
   # We do this conditionally because it saves us some downloading if the
@@ -39,28 +43,33 @@ before_install:
 install:
   - conda config --add channels usgs-astrogeology
   - conda config --add channels conda-forge
+  - conda install numpy pyproj h5py pvl scipy protobuf affine jinja2 networkx pandas sqlalchemy pyyaml ncurses pytest pytest-cov sh coveralls nbsphinx;
   - if $HAS_GDAL; then
-      conda install libgdal gdal numpy pyproj h5py pvl scipy protobuf affine jinja2 networkx pandas sqlalchemy pyyaml ncurses pytest pytest-cov sh coveralls nbsphinx;
-    else
-      conda install numpy pyproj h5py pvl scipy protobuf affine jinja2 networkx pandas sqlalchemy pyyaml ncurses pytest pytest-cov sh coveralls nbsphinx;
+      conda install libgdal gdal;
+    fi
+  - if $HAS_CAMERA; then
+      conda install libcsm csmapi usgscam;
     fi
 
 script:
   - pytest --cov=plio
 
 after_success:
-  - coveralls
-  # Need to do the build in the root
-  - source deactivate
-  - conda install -q conda-build anaconda-client
-  - conda config --set anaconda_upload yes
-  - conda build --token $CONDA_UPLOAD_TOKEN --python $PYTHON_VERSION recipe -q
-
-  # Docs to gh-pages
-  - source activate test  # Reactivate the env to have all deps installed.
-  - pip install travis-sphinx
-  - travis-sphinx build --source=docs --nowarn # The sphinx build script
-  - travis-sphinx deploy
+  # Push all py version that have all dependencies up to travis
+  - if $HAS_GDAL && $HAS_CAMERA; then
+      coveralls
+      source deactivate
+      conda install -q conda-build anaconda-client
+      conda config --set anaconda_upload yes
+      conda build --token $CONDA_UPLOAD_TOKEN --python $PYTHON_VERSION recipe -q
+    fi
+  # Doc deploys only need to happen for a single py version
+  - if $HAS_GDAL && $HAS_CAMERA && [ PYTHON_VERSION=3.6 ]; then
+      source activate test  # Reactivate the env to have all deps installed.
+      pip install travis-sphinx
+      travis-sphinx build --source=docs --nowarn # The sphinx build script
+      travis-sphinx deploy
+    fi
 
 notifications:
   webhooks:
